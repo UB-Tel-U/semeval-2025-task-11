@@ -6,6 +6,8 @@ from transformers import AutoTokenizer
 import torch
 from transformers import AutoModelForSequenceClassification
 import numpy as np
+import datasets
+from datasets import load_dataset, concatenate_datasets
 
 from sklearn.metrics import accuracy_score, f1_score
 
@@ -51,6 +53,50 @@ def preprocess_text(text):
     text = replace_emojis(text)  # Convert emojis
     return text
 
+def text_augmentation():
+    """
+    Augment text by replacing words with their synonyms.
+    """
+    arabic_data = load_dataset("SemEvalWorkshop/sem_eval_2018_task_1", 'subtask5.arabic')
+    english_data = load_dataset("SemEvalWorkshop/sem_eval_2018_task_1", 'subtask5.english')
+    spanish_data = load_dataset("SemEvalWorkshop/sem_eval_2018_task_1", 'subtask5.spanish')
+    arabic_combined = concatenate_datasets([
+        arabic_data['train'], 
+        arabic_data['validation'], 
+        arabic_data['test']
+    ])
+    english_combined = concatenate_datasets([
+        english_data['train'], 
+        english_data['validation'], 
+        english_data['test']
+    ])
+    spanish_combined = concatenate_datasets([
+        spanish_data['train'], 
+        spanish_data['validation'], 
+        spanish_data['test']
+    ])
+
+    del arabic_data, english_data, spanish_data
+
+    arabic_df = pd.DataFrame(data=arabic_combined)
+    english_df = pd.DataFrame(data=english_combined)
+    spanish_df = pd.DataFrame(data=spanish_combined)
+
+    del arabic_combined, english_combined, spanish_combined
+
+    aug_df = pd.concat([arabic_df, english_df, spanish_df], ignore_index=True)
+
+    del english_df, arabic_df, spanish_df
+
+    columns_to_keep = ['Tweet', 'anger', 'fear', 'joy', 'sadness', 'surprise', 'disgust']
+    aug_df = aug_df[columns_to_keep]
+
+    aug_df.rename(columns={'Tweet': 'text'}, inplace=True)
+
+    for col in ['anger', 'fear', 'joy', 'sadness', 'surprise', 'disgust']:
+        aug_df[col] = aug_df[col].astype(int)
+    
+    return aug_df
 
 train_folder_path = "public_data_test/track_a/train"
 dev_folder_path = "public_data_test/track_a/dev"
@@ -76,6 +122,7 @@ def load_and_process_folder(folder_path):
     return df
 
 df_train = load_and_process_folder(train_folder_path)
+df_train = pd.concat([df_train, text_augmentation()], ignore_index=True)
 df_test = load_and_process_folder(dev_folder_path)
 
 train_dataset = Dataset.from_pandas(df_train.reset_index(drop=True))
@@ -108,13 +155,9 @@ def preprocess(batch):
 
 preprocessed_datasets = dataset_dict.map(preprocess, batched=True, remove_columns=dataset_dict['train'].column_names)
 
-
-
 CHECKPOINT = 'FacebookAI/xlm-roberta-base'
 tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
 tokenized_datasets = preprocessed_datasets.map(lambda batch: tokenizer(batch['Tweet'], padding="max_length", truncation=True, max_length=512), batched=True, remove_columns=['Tweet'])
-
-
 
 model = AutoModelForSequenceClassification.from_pretrained(CHECKPOINT, problem_type='multi_label_classification', num_labels=len(LABEL2ID), id2label=ID2LABEL, label2id=LABEL2ID)
 
