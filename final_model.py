@@ -155,11 +155,12 @@ def preprocess(batch):
 
 preprocessed_datasets = dataset_dict.map(preprocess, batched=True, remove_columns=dataset_dict['train'].column_names)
 
+# j-hartmann/emotion-english-distilroberta-base
 CHECKPOINT = 'FacebookAI/xlm-roberta-base'
 tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
 tokenized_datasets = preprocessed_datasets.map(lambda batch: tokenizer(batch['Tweet'], padding="max_length", truncation=True, max_length=512), batched=True, remove_columns=['Tweet'])
 
-model = AutoModelForSequenceClassification.from_pretrained(CHECKPOINT, problem_type='multi_label_classification', num_labels=len(LABEL2ID), id2label=ID2LABEL, label2id=LABEL2ID)
+model = AutoModelForSequenceClassification.from_pretrained(CHECKPOINT, problem_type='multi_label_classification', num_labels=len(LABEL2ID), id2label=ID2LABEL, label2id=LABEL2ID, ignore_mismatched_sizes=True)
 
 def samples_accuracy_score(y_true, y_pred):
     return np.sum(y_true==y_pred) / y_true.size

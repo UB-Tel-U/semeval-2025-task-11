@@ -50,9 +50,11 @@ def preprocess_text(text):
 
 
 emotion_labels = ['anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise']
-CHECKPOINT = 'FacebookAI/xlm-roberta-base'
+# CHECKPOINT = 'FacebookAI/xlm-roberta-base'
+CHECKPOINT = 'j-hartmann/emotion-english-distilroberta-base'
 tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
-model = AutoModelForSequenceClassification.from_pretrained("model-XLM-Roberta-Aug")
+# model = AutoModelForSequenceClassification.from_pretrained("model-XLM-Roberta-Aug")
+model = AutoModelForSequenceClassification.from_pretrained("model-distilroberta")
 twitter_emotion_multilabel_classifier = pipeline(task='text-classification', model=model, tokenizer=tokenizer, device=torch.cuda.current_device(), top_k=None)
 
 
@@ -110,4 +112,4 @@ for file in os.listdir(folder_path):
         df.drop(columns="text", inplace=True)
         
         # print("after",df.columns)
-        df.to_csv(f'public_data_test/track_a/pred/pred_{file}', index=False)
+        df.to_csv(f'public_data_test/track_a/pred_test/pred_{file}', index=False)
