@@ -1,0 +1,188 @@
+import emoji
+import os
+import pandas as pd
+from datasets import Dataset, DatasetDict
+from transformers import AutoTokenizer
+import torch
+from transformers import AutoModelForSequenceClassification
+from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
+
+from sklearn.metrics import accuracy_score, f1_score
+
+SEED = 42
+torch.manual_seed(SEED)
+
+emoticon_dict = {
+    ":)": "happy",
+    ":-)": "happy",
+    ":D": "very happy",
+    ":-D": "very happy",
+    ":(": "sad",
+    ":-(": "sad",
+    ":'(": "crying",
+    ":/": "confused",
+    ":-/": "confused",
+    ";)": "wink",
+    ";-)": "wink",
+    "<3": "love",
+    ":|": "neutral",
+}
+
+
+def replace_emoticons(text):
+    """
+    Replace emoticons in text with their corresponding meanings.
+    """
+    for emoticon, meaning in emoticon_dict.items():
+        text = text.replace(emoticon, f" {meaning} ")
+    return text
+
+def replace_emojis(text):
+    """
+    Replace emojis in text with their corresponding words.
+    """
+    return emoji.demojize(text, delimiters=(" ", " "))
+
+def preprocess_text(text):
+    """
+    Full preprocessing pipeline for texts.
+    """
+    text = replace_emoticons(text)  # Convert emoticons
+    text = replace_emojis(text)  # Convert emojis
+    return text
+
+train_folder_path = "../../public_data_test/track_a/train"
+
+def load_and_process_folder(folder_path):
+    dataframes = []
+
+    for file in os.listdir(folder_path):
+        if file.endswith(".csv"):
+            file_path = os.path.join(folder_path, file)
+            df = pd.read_csv(file_path)
+            df.columns = [col.lower() for col in df.columns]
+
+            lang = os.path.splitext(file)[0]
+            df["lang"] = lang
+
+            df["text"] = df.apply(lambda row: preprocess_text(row["text"]), axis=1)
+            dataframes.append(df)
+
+    combined_df = pd.concat(dataframes, ignore_index=True)
+
+    if len(combined_df.columns) >= 6:
+        for col in combined_df.columns[-6:]:
+            combined_df[col] = pd.to_numeric(combined_df[col], errors='coerce').fillna(0).astype(int)
+
+    df = combined_df.iloc[:,1:]
+    return df
+
+def data_split(df):
+    label_columns = ['anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise', 'lang']
+
+    # Features and labels
+    X = df.drop(label_columns, axis=1)
+    y = df[label_columns]
+
+    # Initialize stratifier
+    msss = MultilabelStratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+
+    # Perform stratified split
+    for train_idx, test_idx in msss.split(X, y):
+        train_df = df.iloc[train_idx]
+        test_df = df.iloc[test_idx]
+    return train_df, test_df
+
+df_train = load_and_process_folder(train_folder_path)
+df_train, df_test = data_split(df_train)
+df_train = df_train.drop("lang", axis=1)
+df_test = df_test.drop("lang", axis=1)
+
+train_dataset = Dataset.from_pandas(df_train.reset_index(drop=True))
+test_dataset = Dataset.from_pandas(df_test.reset_index(drop=True))
+
+dataset_dict = DatasetDict({
+    "train": train_dataset,
+    "test": test_dataset
+})
+
+ID2LABEL = {}
+LABEL2ID = {}
+
+for idx,label in enumerate(df_train.columns):
+    if label in ['text'] or label in ['id']:
+        continue
+
+    ID2LABEL[idx-1] = label
+    LABEL2ID[label] = idx-1
+
+def preprocess(batch):
+    # rename column
+    # batch['ID'] = batch['id']
+    batch['Tweet'] = batch['text']
+
+    # get one-hot encoded labels for each example in batch
+    # for example: anger and sadness = vector of [1,0,0,0,1]
+    batch['labels'] = [[float(batch[label][i]) for label in LABEL2ID] for i in range(len(batch['Tweet']))]
+    return batch
+
+preprocessed_datasets = dataset_dict.map(preprocess, batched=True, remove_columns=dataset_dict['train'].column_names)
+
+models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base']
+
+for model_name in models:
+    CHECKPOINT = model_name
+
+    tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
+    tokenized_datasets = preprocessed_datasets.map(lambda batch: tokenizer(batch['Tweet'], padding="max_length", truncation=True, max_length=512), batched=True, remove_columns=['Tweet'])
+
+    model = AutoModelForSequenceClassification.from_pretrained(CHECKPOINT, problem_type='multi_label_classification', num_labels=len(LABEL2ID), id2label=ID2LABEL, label2id=LABEL2ID, ignore_mismatched_sizes=True)
+
+    def compute_metrics(eval_preds):
+        logits, labels = eval_preds
+        # we sigmoid all logits for multilabel metrics
+        predictions = torch.nn.functional.sigmoid(torch.Tensor(logits))
+        # we set threshold to 0.50 to classify positive >= 0.50 and negative < 0.50
+        predictions = (predictions >= 0.50).int().numpy()
+        # overall accuracy measures accuracy of each true label list and prediction list
+        overall_accuracy = accuracy_score(labels, predictions)
+        # overall f1 measures macro f1 of each true label list and prediction list, ignoring zero division warnings
+        overall_f1 = f1_score(labels, predictions, average='macro', zero_division=0)
+        return {
+            'overall_accuracy': overall_accuracy,
+            'overall_f1': overall_f1,
+        }
+
+    from transformers import TrainingArguments
+
+    training_args = TrainingArguments(
+        seed=SEED,                          # seed for reproducibility
+        output_dir='results',               # output directory to store epoch checkpoints
+        num_train_epochs=1,                 # number of training epochs
+        optim='adamw_torch',                # default optimizer as AdamW
+        per_device_train_batch_size=32,     # 32 train batch size to speed up training
+        per_device_eval_batch_size=32,      # 32 eval batch size to speed up evaluation
+        evaluation_strategy='epoch',        # set evaluation strategy to each epoch instead of default 500 steps
+        save_strategy='epoch',              # set saving of model strategy to each epoch instead of default 500 steps
+        load_best_model_at_end=True,        # load the best model with lowest validation loss
+        report_to='none',                   # suppress third-party logging
+    )
+
+    from transformers import Trainer
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized_datasets['train'],
+        eval_dataset=tokenized_datasets['test'],
+        tokenizer=tokenizer,
+        compute_metrics=compute_metrics,
+    )
+
+    trainer.train()
+    trainer.evaluate(tokenized_datasets['test'])
+    folder_name = "model_"+ CHECKPOINT
+
+    # Create the folder if it does not exist
+    os.makedirs(folder_name, exist_ok=True)
+    trainer.save_model(folder_name)
