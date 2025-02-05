@@ -1,0 +1,11 @@
+*.csv
+model/
+distillbert/
+*.zip
+results/
+__MACOSX
+public_data_dev/
+public_data_test/
+*model*
+*loss*
+*.ipynb
