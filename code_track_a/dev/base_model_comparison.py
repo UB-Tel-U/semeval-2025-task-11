@@ -158,7 +158,7 @@ for model_name in models:
     training_args = TrainingArguments(
         seed=SEED,                          # seed for reproducibility
         output_dir='results',               # output directory to store epoch checkpoints
-        num_train_epochs=1,                 # number of training epochs
+        num_train_epochs=5,                 # number of training epochs
         optim='adamw_torch',                # default optimizer as AdamW
         per_device_train_batch_size=32,     # 32 train batch size to speed up training
         per_device_eval_batch_size=32,      # 32 eval batch size to speed up evaluation
@@ -186,3 +186,5 @@ for model_name in models:
     # Create the folder if it does not exist
     os.makedirs(folder_name, exist_ok=True)
     trainer.save_model(folder_name)
+
+    
