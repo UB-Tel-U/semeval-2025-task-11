@@ -6,11 +6,19 @@ from transformers import AutoTokenizer
 import torch
 from transformers import AutoModelForSequenceClassification
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
-
+from datasets import load_dataset, concatenate_datasets
 from sklearn.metrics import accuracy_score, f1_score
 
 SEED = 42
 torch.manual_seed(SEED)
+
+comparisons = {
+    "baseline": True,
+    "preprocessing": False,
+    "augmentation": False,
+    "majority_voting": False,
+    "union_rule": False,
+}
 
 emoticon_dict = {
     ":)": "happy",
@@ -51,6 +59,55 @@ def preprocess_text(text):
     text = replace_emojis(text)  # Convert emojis
     return text
 
+def text_augmentation():
+    """
+    Augment text by replacing words with their synonyms.
+    """
+    arabic_data = load_dataset("SemEvalWorkshop/sem_eval_2018_task_1", 'subtask5.arabic')
+    english_data = load_dataset("SemEvalWorkshop/sem_eval_2018_task_1", 'subtask5.english')
+    spanish_data = load_dataset("SemEvalWorkshop/sem_eval_2018_task_1", 'subtask5.spanish')
+    arabic_combined = concatenate_datasets([
+        arabic_data['train'], 
+        arabic_data['validation'], 
+        arabic_data['test']
+    ])
+    english_combined = concatenate_datasets([
+        english_data['train'], 
+        english_data['validation'], 
+        english_data['test']
+    ])
+    spanish_combined = concatenate_datasets([
+        spanish_data['train'], 
+        spanish_data['validation'], 
+        spanish_data['test']
+    ])
+
+    del arabic_data, english_data, spanish_data
+
+    arabic_df = pd.DataFrame(data=arabic_combined)
+    english_df = pd.DataFrame(data=english_combined)
+    spanish_df = pd.DataFrame(data=spanish_combined)
+
+    arabic_df["lang"] = "arq"
+    english_df["lang"] = "eng"
+    spanish_df["lang"] = "esp"
+
+    del arabic_combined, english_combined, spanish_combined
+
+    aug_df = pd.concat([arabic_df, english_df, spanish_df], ignore_index=True)
+
+    del english_df, arabic_df, spanish_df
+
+    columns_to_keep = ['Tweet', 'anger', 'fear', 'joy', 'sadness', 'surprise', 'disgust']
+    aug_df = aug_df[columns_to_keep]
+
+    aug_df.rename(columns={'Tweet': 'text'}, inplace=True)
+
+    for col in ['anger', 'fear', 'joy', 'sadness', 'surprise', 'disgust']:
+        aug_df[col] = aug_df[col].astype(int)
+    
+    return aug_df
+
 train_folder_path = "../../public_data_test/track_a/train"
 
 def load_and_process_folder(folder_path):
@@ -65,7 +122,8 @@ def load_and_process_folder(folder_path):
             lang = os.path.splitext(file)[0]
             df["lang"] = lang
 
-            df["text"] = df.apply(lambda row: preprocess_text(row["text"]), axis=1)
+            if comparisons['preprocessing']==True:
+                df["text"] = df.apply(lambda row: preprocess_text(row["text"]), axis=1)
             dataframes.append(df)
 
     combined_df = pd.concat(dataframes, ignore_index=True)
@@ -97,6 +155,10 @@ df_train = load_and_process_folder(train_folder_path)
 df_train, df_test = data_split(df_train)
 df_train = df_train.drop("lang", axis=1)
 df_test = df_test.drop("lang", axis=1)
+
+if comparisons['augmentation']==True:
+    df_train = pd.concat([df_train, text_augmentation()], ignore_index=True)
+
 
 train_dataset = Dataset.from_pandas(df_train.reset_index(drop=True))
 test_dataset = Dataset.from_pandas(df_test.reset_index(drop=True))
@@ -181,10 +243,9 @@ for model_name in models:
 
     trainer.train()
     trainer.evaluate(tokenized_datasets['test'])
-    folder_name = "model_"+ CHECKPOINT
+    key_with_true_value = [key for key, value in comparisons.items() if value is True]
+    folder_name = "models_"+key_with_true_value[0]+"/"+ CHECKPOINT
 
     # Create the folder if it does not exist
     os.makedirs(folder_name, exist_ok=True)
     trainer.save_model(folder_name)
-
-    

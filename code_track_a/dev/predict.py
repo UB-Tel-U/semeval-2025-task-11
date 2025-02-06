@@ -10,46 +10,18 @@ from pathlib import Path
 SEED = 42
 torch.manual_seed(SEED)
 
-emoticon_dict = {
-    ":)": "happy",
-    ":-)": "happy",
-    ":D": "very happy",
-    ":-D": "very happy",
-    ":(": "sad",
-    ":-(": "sad",
-    ":'(": "crying",
-    ":/": "confused",
-    ":-/": "confused",
-    ";)": "wink",
-    ";-)": "wink",
-    "<3": "love",
-    ":|": "neutral",
+folder_names = {
+    "baseline": False,
+    "preprocessing": False,
+    "augmentation": False,
+    "majority_voting": False,
+    "union_rule": False,
 }
+
+key_with_true_value = [key for key, value in folder_names.items() if value is True]
 
 def create_folder(folder_path):
     Path(folder_path).mkdir(parents=True, exist_ok=True)
-
-def replace_emoticons(text):
-    """
-    Replace emoticons in text with their corresponding meanings.
-    """
-    for emoticon, meaning in emoticon_dict.items():
-        text = text.replace(emoticon, f" {meaning} ")
-    return text
-
-def replace_emojis(text):
-    """
-    Replace emojis in text with their corresponding words.
-    """
-    return emoji.demojize(text, delimiters=(" ", " "))
-
-def preprocess_text(text):
-    """
-    Full preprocessing pipeline for texts.
-    """
-    text = replace_emoticons(text)  # Convert emoticons
-    text = replace_emojis(text)  # Convert emojis
-    return text
 
 def tokenize_text(tweet):
     """ Konversi teks ke format tokenized lalu kembali ke string """
@@ -89,7 +61,8 @@ for model_name in models:
     emotion_labels = ['anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise']
     tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
     # model = AutoModelForSequenceClassification.from_pretrained("model-XLM-Roberta-Aug")
-    model = AutoModelForSequenceClassification.from_pretrained("model_"+ CHECKPOINT)
+    model = AutoModelForSequenceClassification.from_pretrained("models_"+key_with_true_value[0]+"/"+ CHECKPOINT)
+    
     twitter_emotion_multilabel_classifier = pipeline(task='text-classification', model=model, tokenizer=tokenizer, device=torch.cuda.current_device(), top_k=None)
 
 
@@ -106,16 +79,16 @@ for model_name in models:
             # print("before",df.columns)
             df.drop(columns=df.columns[2:], inplace=True)
 
-            df["text"] = df.apply(lambda row: preprocess_text(row["text"]), axis=1)
-
             df['text'] = df['text'].apply(lambda tweet: tokenize_text(tweet))
 
             df[emotion_labels] = pd.DataFrame(df['text'].apply(lambda tweet: classify_emotions(tweet, file)).to_list(), index=df.index)
             df = df[column_names]
             df.drop(columns="text", inplace=True)
 
-            output_path = "../../public_data_test/track_a/pred_dev_"+CHECKPOINT
+            output_path = "../../public_data_test/track_a/pred_dev_" + key_with_true_value[0] + "/" + CHECKPOINT
             create_folder(output_path)
-            
+
             # print("after",df.columns)
             df.to_csv(output_path+"/pred_"+file, index=False)
+
+            del key_with_true_value

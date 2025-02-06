@@ -3,6 +3,17 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 import os
 import tqdm
 
+
+folder_names = {
+    "baseline": False,
+    "preprocessing": True,
+    "augmentation": False,
+    "majority_voting": False,
+    "union_rule": False,
+}
+
+key_with_true_value = [key for key, value in folder_names.items() if value is True]
+
 models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base']
 
 def get_average_results(metric,evaluation_results):
@@ -12,7 +23,7 @@ all_evaluation_results = []
 for model_name in models:
     CHECKPOINT = model_name
     gold_path = "../../public_data_test/track_a/dev/"
-    pred_path = "../../public_data_test/track_a/pred_dev_"+CHECKPOINT+"/"
+    pred_path = "../../public_data_test/track_a/pred_dev_" + key_with_true_value[0] + "/" + CHECKPOINT 
     
     evaluation_results = []
     
@@ -20,7 +31,7 @@ for model_name in models:
         if csv_file.endswith(".csv"):
             # Load the gold standard and predicted datasets
             gold_standard = pd.read_csv(gold_path+csv_file)  # Replace with actual gold standard file path
-            predictions = pd.read_csv(pred_path+"pred_"+csv_file)  # Replace with actual predictions file path
+            predictions = pd.read_csv(pred_path+"/pred_"+csv_file)  # Replace with actual predictions file path
 
             # Drop 'id' and 'text' columns if they exist
             gold_standard.drop(columns=['id', 'text'], errors='ignore', inplace=True)
@@ -30,6 +41,7 @@ for model_name in models:
             precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(gold_standard, predictions, average="macro", zero_division=0)
             precision_micro, recall_micro, f1_micro, _ = precision_recall_fscore_support(gold_standard, predictions, average="micro", zero_division=0)
             precision_weighted, recall_weighted, f1_weighted, _ = precision_recall_fscore_support(gold_standard, predictions, average="weighted", zero_division=0)
+            acc = accuracy_score(gold_standard, predictions)
 
             dict_pred = {
                 'lang': os.path.splitext(csv_file)[0],
@@ -42,13 +54,14 @@ for model_name in models:
                 'f1_weighted': f1_weighted,
                 'precision_weighted': precision_weighted,
                 'recall_weighted': recall_weighted,
-                'accuracy': f1_weighted
+                'accuracy': acc
             }
 
             evaluation_results.append(dict_pred)
     
     # Append results to a CSV file
-    results_file = "evaluation/eval_results_"+model_name+".csv"
+    results_file = "evaluation/"+key_with_true_value[0]+"/"+model_name+".csv"
+
     os.makedirs(os.path.dirname(results_file), exist_ok=True)  # Ensure the folder exists
     pd.DataFrame(evaluation_results).to_csv(results_file, index=False)
 
@@ -68,6 +81,6 @@ for model_name in models:
 
     all_evaluation_results.append(dict_pred)
     
-results_file = "evaluation/all_eval_results.csv"
+results_file = "evaluation/"+key_with_true_value[0]+"/all_eval_results.csv"
 os.makedirs(os.path.dirname(results_file), exist_ok=True)  # Ensure the folder exists
 pd.DataFrame(all_evaluation_results).to_csv(results_file, index=False)
