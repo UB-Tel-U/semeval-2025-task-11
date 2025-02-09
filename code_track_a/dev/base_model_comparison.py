@@ -14,11 +14,13 @@ torch.manual_seed(SEED)
 
 comparisons = {
     "baseline": True,
-    "preprocessing": False,
-    "augmentation": False,
+    "preprocessing": True,
+    "augmentation": True,
     "majority_voting": False,
     "union_rule": False,
 }
+
+model_process = "_".join([key for key, value in comparisons.items() if value])
 
 emoticon_dict = {
     ":)": "happy",
@@ -190,7 +192,7 @@ def preprocess(batch):
 
 preprocessed_datasets = dataset_dict.map(preprocess, batched=True, remove_columns=dataset_dict['train'].column_names)
 
-models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base']
+models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base', 'j-hartmann/emotion-english-distilroberta-base']
 
 for model_name in models:
     CHECKPOINT = model_name
@@ -243,8 +245,7 @@ for model_name in models:
 
     trainer.train()
     trainer.evaluate(tokenized_datasets['test'])
-    key_with_true_value = [key for key, value in comparisons.items() if value is True]
-    folder_name = "models_"+key_with_true_value[0]+"/"+ CHECKPOINT
+    folder_name = "models_"+model_process+"/"+ CHECKPOINT
 
     # Create the folder if it does not exist
     os.makedirs(folder_name, exist_ok=True)

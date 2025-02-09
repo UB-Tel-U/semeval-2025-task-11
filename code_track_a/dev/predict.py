@@ -11,14 +11,14 @@ SEED = 42
 torch.manual_seed(SEED)
 
 folder_names = {
-    "baseline": False,
-    "preprocessing": False,
-    "augmentation": False,
+    "baseline": True,
+    "preprocessing": True,
+    "augmentation": True,
     "majority_voting": False,
     "union_rule": False,
 }
 
-key_with_true_value = [key for key, value in folder_names.items() if value is True]
+model_process = "_".join([key for key, value in folder_names.items() if value])
 
 def create_folder(folder_path):
     Path(folder_path).mkdir(parents=True, exist_ok=True)
@@ -54,14 +54,17 @@ def classify_emotions(tweet, file):
 
     return [binary_labels[emotion] for emotion in emotion_labels]
 
-models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base']
+models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base', 'j-hartmann/emotion-english-distilroberta-base']
 
 for model_name in models:
     CHECKPOINT = model_name
     emotion_labels = ['anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise']
     tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
     # model = AutoModelForSequenceClassification.from_pretrained("model-XLM-Roberta-Aug")
-    model = AutoModelForSequenceClassification.from_pretrained("models_"+key_with_true_value[0]+"/"+ CHECKPOINT)
+    model_path = "models_"+model_process+"/"+ CHECKPOINT
+    if not os.path.exists(model_path):  # Check if folder does not exist
+        continue
+    model = AutoModelForSequenceClassification.from_pretrained(model_path)
     
     twitter_emotion_multilabel_classifier = pipeline(task='text-classification', model=model, tokenizer=tokenizer, device=torch.cuda.current_device(), top_k=None)
 
@@ -84,11 +87,9 @@ for model_name in models:
             df[emotion_labels] = pd.DataFrame(df['text'].apply(lambda tweet: classify_emotions(tweet, file)).to_list(), index=df.index)
             df = df[column_names]
             df.drop(columns="text", inplace=True)
-
-            output_path = "../../public_data_test/track_a/pred_dev_" + key_with_true_value[0] + "/" + CHECKPOINT
+            
+            output_path = "../../public_data_test/track_a/pred_dev_" + model_process + "/" + CHECKPOINT
             create_folder(output_path)
 
             # print("after",df.columns)
             df.to_csv(output_path+"/pred_"+file, index=False)
-
-            del key_with_true_value

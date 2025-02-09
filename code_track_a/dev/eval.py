@@ -5,16 +5,16 @@ import tqdm
 
 
 folder_names = {
-    "baseline": False,
+    "baseline": True,
     "preprocessing": True,
-    "augmentation": False,
+    "augmentation": True,
     "majority_voting": False,
     "union_rule": False,
 }
 
-key_with_true_value = [key for key, value in folder_names.items() if value is True]
+model_process = "_".join([key for key, value in folder_names.items() if value])
 
-models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base']
+models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base', 'j-hartmann/emotion-english-distilroberta-base']
 
 def get_average_results(metric,evaluation_results):
     return sum(d[metric] for d in evaluation_results) / len(evaluation_results)
@@ -23,7 +23,10 @@ all_evaluation_results = []
 for model_name in models:
     CHECKPOINT = model_name
     gold_path = "../../public_data_test/track_a/dev/"
-    pred_path = "../../public_data_test/track_a/pred_dev_" + key_with_true_value[0] + "/" + CHECKPOINT 
+    pred_path = "../../public_data_test/track_a/pred_dev_" + model_process + "/" + CHECKPOINT 
+
+    if not os.path.exists(pred_path):  # Check if folder does not exist
+        continue
     
     evaluation_results = []
     
@@ -60,7 +63,7 @@ for model_name in models:
             evaluation_results.append(dict_pred)
     
     # Append results to a CSV file
-    results_file = "evaluation/"+key_with_true_value[0]+"/"+model_name+".csv"
+    results_file = "evaluation/"+model_process+"/"+model_name+".csv"
 
     os.makedirs(os.path.dirname(results_file), exist_ok=True)  # Ensure the folder exists
     pd.DataFrame(evaluation_results).to_csv(results_file, index=False)
@@ -77,10 +80,19 @@ for model_name in models:
         'avg_precision_weighted': get_average_results("precision_weighted",evaluation_results),
         'avg_recall_weighted': get_average_results("recall_weighted",evaluation_results),
         'avg_accuracy': get_average_results("accuracy",evaluation_results),
+        "process" : model_process,
     }
 
     all_evaluation_results.append(dict_pred)
-    
-results_file = "evaluation/"+key_with_true_value[0]+"/all_eval_results.csv"
+
+results_file = "evaluation/all_eval_results.csv"
 os.makedirs(os.path.dirname(results_file), exist_ok=True)  # Ensure the folder exists
-pd.DataFrame(all_evaluation_results).to_csv(results_file, index=False)
+
+# Convert the dictionary to a DataFrame
+new_data = pd.DataFrame(all_evaluation_results)  # Ensure it's wrapped in a list for row-wise addition
+
+# Check if the file exists to determine whether to write headers
+if os.path.exists(results_file):
+    new_data.to_csv(results_file, mode='a', header=False, index=False)  # Append without headers
+else:
+    new_data.to_csv(results_file, mode='w', header=True, index=False)  # Write with headers if new file
