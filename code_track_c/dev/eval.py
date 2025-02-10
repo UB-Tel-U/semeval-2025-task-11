@@ -3,18 +3,7 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 import os
 import tqdm
 
-
-folder_names = {
-    "baseline": True,
-    "preprocessing": False,
-    "augmentation": False,
-    "majority_voting": False,
-    "union_rule": False,
-}
-
-model_process = "_".join([key for key, value in folder_names.items() if value])
-
-models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base', 'j-hartmann/emotion-english-distilroberta-base', 'llama3']
+models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base']
 
 def get_average_results(metric,evaluation_results):
     return sum(d[metric] for d in evaluation_results) / len(evaluation_results)
@@ -23,13 +12,7 @@ all_evaluation_results = []
 for model_name in models:
     CHECKPOINT = model_name
     gold_path = "../../public_data_test/track_a/dev/"
-    if model_name == "llama3":
-        pred_path = "../../public_data_test/track_a/pred_dev_" + CHECKPOINT
-    else:
-        pred_path = "../../public_data_test/track_a/pred_dev_" + model_process + "/" + CHECKPOINT 
-
-    if not os.path.exists(pred_path):  # Check if folder does not exist
-        continue
+    pred_path = "../../public_data_test/track_a/pred_dev_"+CHECKPOINT+"/"
     
     evaluation_results = []
     
@@ -37,7 +20,7 @@ for model_name in models:
         if csv_file.endswith(".csv"):
             # Load the gold standard and predicted datasets
             gold_standard = pd.read_csv(gold_path+csv_file)  # Replace with actual gold standard file path
-            predictions = pd.read_csv(pred_path+"/pred_"+csv_file)  # Replace with actual predictions file path
+            predictions = pd.read_csv(pred_path+"pred_"+csv_file)  # Replace with actual predictions file path
 
             # Drop 'id' and 'text' columns if they exist
             gold_standard.drop(columns=['id', 'text'], errors='ignore', inplace=True)
@@ -47,7 +30,6 @@ for model_name in models:
             precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(gold_standard, predictions, average="macro", zero_division=0)
             precision_micro, recall_micro, f1_micro, _ = precision_recall_fscore_support(gold_standard, predictions, average="micro", zero_division=0)
             precision_weighted, recall_weighted, f1_weighted, _ = precision_recall_fscore_support(gold_standard, predictions, average="weighted", zero_division=0)
-            acc = accuracy_score(gold_standard, predictions)
 
             dict_pred = {
                 'lang': os.path.splitext(csv_file)[0],
@@ -60,14 +42,13 @@ for model_name in models:
                 'f1_weighted': f1_weighted,
                 'precision_weighted': precision_weighted,
                 'recall_weighted': recall_weighted,
-                'accuracy': acc
+                'accuracy': f1_weighted
             }
 
             evaluation_results.append(dict_pred)
     
     # Append results to a CSV file
-    results_file = "evaluation/"+model_process+"/"+model_name+".csv"
-
+    results_file = "evaluation/eval_results_"+model_name+".csv"
     os.makedirs(os.path.dirname(results_file), exist_ok=True)  # Ensure the folder exists
     pd.DataFrame(evaluation_results).to_csv(results_file, index=False)
 
@@ -83,19 +64,10 @@ for model_name in models:
         'avg_precision_weighted': get_average_results("precision_weighted",evaluation_results),
         'avg_recall_weighted': get_average_results("recall_weighted",evaluation_results),
         'avg_accuracy': get_average_results("accuracy",evaluation_results),
-        "process" : model_process,
     }
 
     all_evaluation_results.append(dict_pred)
-
+    
 results_file = "evaluation/all_eval_results.csv"
 os.makedirs(os.path.dirname(results_file), exist_ok=True)  # Ensure the folder exists
-
-# Convert the dictionary to a DataFrame
-new_data = pd.DataFrame(all_evaluation_results)  # Ensure it's wrapped in a list for row-wise addition
-
-# Check if the file exists to determine whether to write headers
-if os.path.exists(results_file):
-    new_data.to_csv(results_file, mode='a', header=False, index=False)  # Append without headers
-else:
-    new_data.to_csv(results_file, mode='w', header=True, index=False)  # Write with headers if new file
+pd.DataFrame(all_evaluation_results).to_csv(results_file, index=False)
