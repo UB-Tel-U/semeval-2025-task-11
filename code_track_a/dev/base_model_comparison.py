@@ -16,8 +16,6 @@ comparisons = {
     "baseline": True,
     "preprocessing": True,
     "augmentation": True,
-    "majority_voting": False,
-    "union_rule": False,
 }
 
 model_process = "_".join([key for key, value in comparisons.items() if value])
