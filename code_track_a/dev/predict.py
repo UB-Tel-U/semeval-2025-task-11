@@ -14,8 +14,6 @@ folder_names = {
     "baseline": True,
     "preprocessing": True,
     "augmentation": True,
-    "majority_voting": False,
-    "union_rule": False,
 }
 
 model_process = "_".join([key for key, value in folder_names.items() if value])
@@ -54,7 +52,7 @@ def classify_emotions(tweet, file):
 
     return [binary_labels[emotion] for emotion in emotion_labels]
 
-models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base', 'j-hartmann/emotion-english-distilroberta-base']
+models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased']
 
 for model_name in models:
     CHECKPOINT = model_name

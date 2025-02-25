@@ -190,7 +190,7 @@ def preprocess(batch):
 
 preprocessed_datasets = dataset_dict.map(preprocess, batched=True, remove_columns=dataset_dict['train'].column_names)
 
-models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased', 'FacebookAI/xlm-roberta-base', 'j-hartmann/emotion-english-distilroberta-base']
+models = ['bert-base-multilingual-cased', 'distilbert-base-multilingual-cased']
 
 for model_name in models:
     CHECKPOINT = model_name

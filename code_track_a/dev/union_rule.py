@@ -7,7 +7,9 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 models = [
     ("xlm-roberta", "public_data_test/track_a/pred_dev_baseline_preprocessing_augmentation/FacebookAI/xlm-roberta-base/"),    
     ("distilroberta", "public_data_test/track_a/pred_dev_baseline_preprocessing_augmentation/j-hartmann/emotion-english-distilroberta-base/"),
-    ("illama3", "public_data_test/track_a/pred_dev_llama3/")
+    ("illama3", "public_data_test/track_a/pred_dev_llama3/"),
+    ("bert", "public_data_test/track_a/pred_dev_baseline_preprocessing_augmentation/bert-base-multilingual-cased/"),
+    ("distilbert", "public_data_test/track_a/pred_dev_baseline_preprocessing_augmentation/distilbert-base-multilingual-cased/"),
 ]
 
 def get_average_results(metric, evaluation_results):
