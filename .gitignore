@@ -1,0 +1,12 @@
+*.csv
+*.zip
+results/
+__MACOSX
+public_data_dev/
+public_data_test/
+*model*
+*loss*
+*.ipynb
+*.json
+*.bin
+*.txt
