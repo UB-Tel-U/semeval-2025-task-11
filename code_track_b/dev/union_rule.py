@@ -61,12 +61,19 @@ for r in range(2, len(models) + 1):
                 for df in dfs[1:]:
                     assert df["id"].equals(dfs[0]["id"]), f"Mismatch in row ordering for file {csv_file} in combination {combo_names}"
 
-                # For union rule, set the threshold to 1: if any model predicts positive, the union is positive
-                threshold = 1
+                # Stack intensity predictions: shape = (n_samples, n_models, n_emotions)
+                stacked = np.stack([df[target_labels].values for df in dfs], axis=1)
 
-                # Ensemble by summing predictions and applying the threshold
-                ensemble_predictions = (sum(df[target_labels] for df in dfs) >= threshold).astype(int)
+                # Max intensity across models (strongest signal)
+                max_intensity = np.max(stacked, axis=1)  # shape: (n_samples, n_emotions)
 
+                # Binary mask: whether each label meets the threshold (e.g., union or majority)
+                threshold = 1  # for union rule
+                binary_mask = (sum(df[target_labels] for df in dfs) >= threshold).astype(int).values  # shape: (n_samples, n_emotions)
+
+                # Apply mask: keep max intensity only if binary decision is 1; otherwise 0
+                ensemble_predictions = (binary_mask * max_intensity).astype(int)
+                
                 # Build the ensemble DataFrame, keeping the 'id' column from the reference DataFrame
                 ensemble_df = dfs[0][["id"]].copy()
                 ensemble_df[target_labels] = ensemble_predictions
